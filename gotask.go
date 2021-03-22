@@ -1,6 +1,7 @@
 package gotask
 
 import (
+	"log"
 	"sync"
 	"time"
 )
@@ -11,11 +12,14 @@ type Task struct {
 	Run   func()       // 任务
 }
 
-// 初始化3层堆
-var tasks []*Task = make([]*Task, 0, 15)
-
-// 堆操作锁
-var mu sync.Mutex
+var (
+	// 初始化3层堆
+	tasks []*Task = make([]*Task, 0, 15)
+	// 运行
+	running = true
+	// 堆操作锁
+	mu sync.Mutex
+)
 
 func left(i int) int {
 	return i*2 + 1
@@ -74,7 +78,7 @@ func Min() *Task {
 	return tasks[0]
 }
 
-// 弹出最小的任务
+// 弹出最早的任务
 func Pop() *Task {
 	mu.Lock()
 	defer mu.Unlock()
@@ -88,8 +92,38 @@ func Pop() *Task {
 	return min
 }
 
+// 任务执行宕机恢复
+func TaskRun(run func()) func() {
+	return func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Println(err)
+			}
+		}()
+		run()
+	}
+}
+
+// 容错处理
+func TaskNext(run func() int64) func() int64 {
+	return func() int64 {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Println(err)
+			}
+		}()
+		return run()
+	}
+}
+
+func Stop() {
+	running = false
+}
+
 func Run() {
-	for {
+	defer log.Println("Stop gotask")
+	log.Println("Start gotask")
+	for running {
 		var task = Min()
 		for task != nil && task.Start <= time.Now().Unix() {
 			go task.Run()
@@ -109,4 +143,8 @@ func Run() {
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+func init() {
+	go Run()
 }
