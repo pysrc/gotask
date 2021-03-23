@@ -93,7 +93,7 @@ func Pop() *Task {
 }
 
 // 任务执行宕机恢复
-func TaskRun(run func()) func() {
+func taskRun(run func()) func() {
 	return func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -105,7 +105,7 @@ func TaskRun(run func()) func() {
 }
 
 // 容错处理
-func TaskNext(run func() int64) func() int64 {
+func taskNext(run func() int64) func() int64 {
 	return func() int64 {
 		defer func() {
 			if err := recover(); err != nil {
@@ -126,9 +126,9 @@ func Run() {
 	for running {
 		var task = Min()
 		for task != nil && task.Start <= time.Now().Unix() {
-			go task.Run()
+			go taskRun(task.Run)()
 			if task.Next != nil {
-				task.Start = task.Next()
+				task.Start = taskNext(task.Next)()
 				if task.Start > time.Now().Unix() {
 					mu.Lock()
 					heapfiy(0)
